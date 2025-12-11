@@ -179,13 +179,78 @@ julia> y[]
 (retrieve(var::Symbol, safehouse::Safehouse{M}=safehouse())::Vector{Refugee{M}}) where M =
     retrieve.(safehouse.variables[var], Ref(safehouse))
 
-function unsafesave(sols, path::String; spwarn::Bool=false)::String
+function unsafe_save(sols, path::String; spwarn::Bool=false)::String
     if !spwarn
-        @warn "`unsafesave` may overwrite existing files. Use `save` instead."
+        @warn "`unsafe_save` may overwrite existing files. Use `save` instead."
     end # if !
     JLD2.save_object(path, sols)
     return path
-end # function unsafesave
+end # function unsafe_save
+
+macro protect_str(str)
+    return str
+end # macro protect_str
+
+macro safe_save(expr::Expr)
+    # find the protected path
+    function ismacrocall(expr::Expr, symbol::Symbol)::Bool
+        if expr.head === :macrocall
+            if expr.args[1] === symbol
+                return true
+            elseif (
+                expr.args[1] isa Expr &&
+                expr.args[1].head === :. &&
+                expr.args[1].args[2] isa QuoteNode &&
+                expr.args[1].args[2].value === symbol
+            )
+                return true
+            end # if ===; elseif
+        end # if ===
+        return false
+    end
+    findpath(_)::Vector = []
+    function findpath(expr::Expr)::Vector
+        found = []
+        if ismacrocall(expr, Symbol("@protect_str"))
+            dump(expr)
+            push!(found, expr.args[3])
+        else # recursively search args
+            for arg in expr.args
+                got = findpath(arg)
+                append!(found, got)
+            end # for arg
+        end # if ==
+        return found
+    end # function findpath
+    paths = findpath(expr)
+    if length(paths) == 0
+        throw(ArgumentError("No path string is marked with `protect\"\"` macro in the expression."))
+    elseif length(paths) > 1
+        throw(
+            ArgumentError(
+                "Multiple path strings are marked with `protect\"\"` macro in the expression. Only one is allowed."
+            )
+        )
+    end
+    path = only(paths)
+    # generate code
+    return quote
+        if isfile($path)
+            modified = Dates.format(
+                TZ.astimezone(
+                    TZ.ZonedDateTime(Dates.unix2datetime(mtime($path)), TZ.tz"UTC"),
+                    TZ.localzone()
+                ),
+                Dates.dateformat"on d u Y at HH:MM:SS"
+            ) # Dates.format
+            nameext = splitext($path)
+            newpath = string(nameext[1], '_', reprhex(unique_id()), nameext[2])
+            @warn "File $path already exists. Last modified $modified. The EXISTING file has been renamed to $newpath."
+            mv($path, newpath)
+        end # if isfile
+        $expr
+    end
+end
 
 """
     save(obj, path::String=joinpath(pwd(), string(reprhex(unique_id()), ".dat"))) -> String
@@ -206,29 +271,15 @@ julia> save("Hello again", "./greating.jld2")
 "./greating.jld2"
 ```
 """
-function save(obj, path::String=joinpath(pwd(), string(reprhex(unique_id()), ".jld2")); kwargs...)::String
-    if isfile(path)
-        modified = Dates.format(
-            TZ.astimezone(
-                TZ.ZonedDateTime(Dates.unix2datetime(mtime(path)), TZ.tz"UTC"),
-                TZ.localzone()
-            ),
-            Dates.dateformat"on d u Y at HH:MM:SS"
-        ) # Dates.format
-        nameext = splitext(path)
-        newpath = string(nameext[1], '_', reprhex(unique_id()), nameext[2])
-        @warn "File $path already exists. Last modified $modified. The EXISTING file has been renamed to $newpath."
-        mv(path, newpath)
-    end # if isfile
-    return unsafesave(obj, path; spwarn=true, kwargs...)
-end # function save
+@generated save(obj, path::String=joinpath(pwd(), string(reprhex(unique_id()), ".jld2")); kwargs...)::String =
+    @safe_save unsafe_save(obj, @protect_str(path); spwarn=true, kwargs...)
 
-function unsafeload(path::String; spwarn::Bool=false)
+function unsafe_load(path::String; spwarn::Bool=false)
     if !spwarn
-        @warn "`unsafeload` could overwrite existing variables. Use `load!` instead."
+        @warn "`unsafe_load` could overwrite existing variables. Use `load!` instead."
     end # if !
     return JLD2.load_object(path)
-end # function unsafeload
+end # function unsafe_load
 
 """
     load!(to::Symbol, path::String, modu::Module=Main; house::Symbol=:SAFEHOUSE)
@@ -258,7 +309,7 @@ function load!(to::Symbol, path::String, modu::Module=Main; house::Symbol=:SAFEH
         refugee = house!(to, safehouse(modu, house))
         @warn "Variable `$to` already defined in $modu. The existing value has been stored in safehouse `$modu.$safehouse` with ID $(reprhex(refugee.id, true))."
     end # if isdefined
-    loaded = unsafeload(path; spwarn=true)
+    loaded = unsafe_load(path; spwarn=true)
     @eval modu $to = $loaded
     return loaded
 end # function load!
