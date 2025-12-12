@@ -7,12 +7,6 @@ export safe_assign!, @safe_assign
 export safehouse, house!, retrieve
 export load_object!
 
-const keywords::NTuple{29,Symbol} = (
-    :baremodule, :begin, :break, :catch, :const, :continue, :do, :else, :elseif, :end,
-    :export, Symbol(false), :finally, :for, :function, :global, :if, :import, :let, :local,
-    :macro, :module, :quote, :return, :struct, Symbol(true), :try, :using, :while
-)
-
 """
     Refugee{M}
 
@@ -212,6 +206,12 @@ function unsafe_load_object(path::AbstractString; spwarn::Bool=false)
     return JLD2.load_object(path)
 end # function unsafe_load_object
 
+const keywords::NTuple{29,Symbol} = (
+    :baremodule, :begin, :break, :catch, :const, :continue, :do, :else, :elseif, :end,
+    :export, Symbol(false), :finally, :for, :function, :global, :if, :import, :let, :local,
+    :macro, :module, :quote, :return, :struct, Symbol(true), :try, :using, :while
+)
+
 """
     safe_assign!(to::Symbol, val, modu::Module=Main; house::Symbol=:SAFEHOUSE, force::Bool=false)
 
@@ -273,7 +273,7 @@ function safe_assign!(
 end # function safe_assign!
 
 """
-    @safe_assign expr, house::Symbol=:SAFEHOUSE
+    @safe_assign [global] [const] var = value [house=:SAFEHOUSE]
 
 A macro that performs an assignment of the form `[const] var = value`. If `var` already
 exists in the current module, its value is copied to the safehouse specified by `house`
@@ -306,11 +306,14 @@ julia> @safe_assign const y = 4
 ```
 """
 macro safe_assign(expr::Expr, house::QuoteNode=QuoteNode(:SAFEHOUSE))
-    constant = (expr.head === :const)
-    if !(expr.head === :(=) || (constant && expr.args[1].head === :(=)))
+    if expr.head === :local
+        throw(ArgumentError("@safe_assign does not support local variable assignments."))
+    end
+    assignment = (expr.head === :const) ? expr.args[1] : expr
+    assignment = (expr.head === :global) ? assignment.args[1] : assignment
+    if assignment.head !== :(=)
         throw(ArgumentError("@safe_assign only works with assignment expressions."))
     end # if !
-    assignment = constant ? expr.args[1] : expr
     callexpr = :(
         safe_assign!(
             $(QuoteNode(assignment.args[1])), $(assignment.args[2]), $__module__;

@@ -7,22 +7,6 @@ export ProtectedPath
 export @safe_save
 export protect, save_object
 
-"""
-    ProtectedPath <: AbstractString
-
-A wrapper type for file paths that indicates the path should be protected in the
-`@safe_save` macro.
-
-See also [`@safe_save`](@ref).
-"""
-struct ProtectedPath <: AbstractString
-    path::String
-    ProtectedPath(path::AbstractString) = new(String(path))
-end # struct ProtectedPath
-
-Base.iterate(p::ProtectedPath) = iterate(p.path)
-Base.iterate(p::ProtectedPath, i::Int) = iterate(p.path, i)
-
 function unsafe_save_object(obj, path::AbstractString; spwarn::Bool=false)::AbstractString
     if !spwarn
         @warn "`unsafe_save` may overwrite existing files. Use `save` instead."
@@ -32,12 +16,12 @@ function unsafe_save_object(obj, path::AbstractString; spwarn::Bool=false)::Abst
 end # function unsafe_save_object
 
 """
-    protect(savefunc::Function, path::AbstractString, args...; kwargs...) -> Bool
+    protect(savefunc::Function, path::AbstractString, args...; kwargs...)
 
 Protect the file at `path` when performing `savefunc(path, args...; kwargs...)`. If a file
 already exists at `path` and is modified during the save operation, the original file is
-backuped to a new file with a unique identifier appended to its name. Returns `true` if a
-file was protected, `false` otherwise.
+backuped to a new file with a unique identifier appended to its name. Returns the value
+returned by `savefunc`.
 
 See also [`@safe_save`](@ref).
 
@@ -46,17 +30,17 @@ See also [`@safe_save`](@ref).
 julia> protect("./greating.txt", "Hello World") do path, content
            write(path, content)
        end
-false
+11
 
-julia> protect("./greating.txt", "Hello Again") do path, content
+julia> protect("./greating.txt", "Hello Again!") do path, content
            write(path, content)
        end
 ┌ Warning: File ./greating.txt already exists. Last modified on 12 Dec 2025 at 19:02:12. The EXISTING file has been renamed to ./greating_e7c4a63a.txt.
-└ @ SafeIO.Save src/save.jl:75
-true
+└ @ SafeIO.Save src/save.jl:71
+12
 ```
 """
-function protect(savefunc::Function, path::AbstractString, args...; kwargs...)::Bool
+function protect(savefunc::Function, path::AbstractString, args...; kwargs...)
     # prepare
     pflag = false
     if isfile(path)
@@ -79,7 +63,7 @@ function protect(savefunc::Function, path::AbstractString, args...; kwargs...)::
     end # if pflag
     # perform save
     try # save and handle existing file
-        savefunc(path, args...; kwargs...)
+        val = savefunc(path, args...; kwargs...)
         if pflag && open(CRC.crc32c, path) != filehash # file changed
             cp(tempath, newpath)
             rm(tempath)
@@ -87,6 +71,7 @@ function protect(savefunc::Function, path::AbstractString, args...; kwargs...)::
                 "File $(path) already exists. Last modified $modified. The EXISTING file has been renamed to $newpath."
             )
         end # if pflag
+        return val
     catch err
         if pflag
             warnmsg = (open(CRC.crc32c, path) == filehash) ?
@@ -96,10 +81,45 @@ function protect(savefunc::Function, path::AbstractString, args...; kwargs...)::
         end
         rethrow(err)
     end # try,catch
-    return pflag
 end # function protect
 
-#TODO VVVVVVVVVVVVVVVVVVVVVVVVVV
+"""
+    ProtectedPath <: AbstractString
+
+A wrapper type for file paths that indicates the path should be protected in the
+`@safe_save` macro. The constructor must be called when using `@safe_save`.
+
+See also [`@safe_save`](@ref).
+"""
+struct ProtectedPath <: AbstractString
+    path::String
+    ProtectedPath(path::AbstractString) = new(String(path))
+end # struct ProtectedPath
+
+Base.iterate(p::ProtectedPath) = iterate(p.path)
+Base.iterate(p::ProtectedPath, i::Int) = iterate(p.path, i)
+
+"""
+    @safe_save function_call(..., ProtectedPath("path/to/file"), ...)
+
+Perform `function_call` while protecting the file at the specified `ProtectedPath` in the
+call, which is done by invoking `protect`. Only one `ProtectedPath` is allowed in the
+expression. `ProtectedPath` must be called when using the macro. Passing an instance of
+`ProtectedPath` directly will result in an error.
+
+See also [`protect`](@ref), [`save_object`](@ref).
+
+# Examples
+```julia-repl
+julia> @safe_save write(ProtectedPath("./greating.txt"), "Hello World")
+11
+
+julia> @safe_save write(ProtectedPath("./greating.txt"), "Hello Again!")
+┌ Warning: File ./greating.txt already exists. Last modified on 13 Dec 2025 at 00:40:00. The EXISTING file has been renamed to ./greating_1689874a.txt.
+└ @ SafeIO.Save src/save.jl:70
+12
+```
+"""
 macro safe_save(expr::Expr)
     # check call
     if expr.head !== :call
@@ -128,9 +148,9 @@ macro safe_save(expr::Expr)
     path = only(paths)
     # construct protected call
     if expr.args[2] isa Expr && expr.args[2].head === :parameters # call has ;
-        protect_call = Expr(:call, :protect, expr.args[2], expr.args[1], path, expr.args[3:end]...)
+        protect_call = Expr(:call, :protect, expr.args[2], expr.args[1], expr.args[3:end]...)
     else # no ;
-        protect_call = Expr(:call, :protect, expr.args[1], path, expr.args[2:end]...)
+        protect_call = Expr(:call, :protect, expr.args[1], expr.args[2:end]...)
     end # if &&,else
     return protect_call
 end # macro safe_save
@@ -146,13 +166,13 @@ include a unique identifier before saving `obj`.
 julia> save_object("Hello World", "./greating.jld2")
 "./greating.jld2"
 
-julia> save_object("Hello again", "./greating.jld2")
-┌ Warning: File ./greating.jld2 already exists. Last modified on 11 Dec 2025 at 11:25:35. The EXISTING file has been renamed to ./greating_e9feb26a.jld2.
-└ @ SafeIO src/SafeIO.jl:220
+julia> save_object("Hello Again!", "./greating.jld2")
+┌ Warning: File ./greating.jld2 already exists. Last modified on 13 Dec 2025 at 00:48:04. The EXISTING file has been renamed to ./greating_38ff9f7a.jld2.
+└ @ SafeIO.Save src/save.jl:70
 "./greating.jld2"
 ```
 """
-save_object(obj, path::AbstractString=joinpath(pwd(), string(reprhex(unique_id()), ".jld2")))::Bool =
+save_object(obj, path::AbstractString=joinpath(pwd(), string(reprhex(unique_id()), ".jld2")))::AbstractString =
     protect((path, obj; spwarn) -> unsafe_save_object(obj, path; spwarn), path, obj; spwarn=true)
 
 end # module Save
