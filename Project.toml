@@ -1,6 +1,6 @@
 name = "SafeIO"
 uuid = "b60d60a1-a286-437d-88e3-564ee59fee65"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Waylon Wu <waylon_wu@outlook.com>"]
 
 [deps]
