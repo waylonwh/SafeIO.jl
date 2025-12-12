@@ -1,6 +1,6 @@
 module SafeIO
 
-import UUIDs, JLD2, Dates, TimeZones as TZ
+import UUIDs, JLD2, Dates, CRC32c as CRC, TimeZones as TZ
 
 export safehouse, house!, retrieve
 export save, load!
@@ -187,69 +187,61 @@ function unsafe_save(sols, path::String; spwarn::Bool=false)::String
     return path
 end # function unsafe_save
 
-macro protect_str(str)
-    return str
-end # macro protect_str
+function protect(savefunc::Function, path::AbstractString, args...; kwargs...)::Bool
+    # prepare
+    pflag = false
+    if isfile(path)
+        pflag = true
+        modified = Dates.format(
+            TZ.astimezone(
+                TZ.ZonedDateTime(Dates.unix2datetime(mtime(path)), TZ.tz"UTC"),
+                TZ.localzone()
+            ),
+            Dates.dateformat"on d u Y at HH:MM:SS"
+        ) # Dates.format
+        nameext = splitext(path)
+        tempath = tempname(; cleanup=false, suffix=nameext[2])
+        filehash = open(CRC.crc32c, path)
+        newpath = string(nameext[1], '_', reprhex(unique_id()), nameext[2])
+    end # if isfile
+    # backup
+    if pflag
+        cp(path, tempath)
+    end # if pflag
+    # perform save
+    try # save and handle existing file
+        savefunc(path, args...; kwargs...)
+        if pflag && open(CRC.crc32c, path) != filehash # file changed
+            cp(tempath, newpath)
+            rm(tempath)
+            @warn(
+                "File $(path) already exists. Last modified $modified. The EXISTING file has been renamed to $newpath."
+            )
+        end # if pflag
+    catch err
+        if pflag
+            warnmsg = (open(CRC.crc32c, path) == filehash) ?
+                "The file remains unchanged. However, a backup copy has been saved to $tempath." :
+                "The file has been MODIFIED. The existing file has been backed up to $tempath. Retrieve timely if needed."
+            @warn string("An error occurred during saving. ", warnmsg)
+        end
+        rethrow(err)
+    end # try; catch
+    return pflag
+end # function protect
+
+struct ProtectedPath <: AbstractString
+    path::String
+end # struct ProtectedPath
+
+Base.iterate(p::ProtectedPath) = iterate(p.path)
+Base.iterate(p::ProtectedPath, i::Int) = iterate(p.path, i)
 
 macro safe_save(expr::Expr)
-    # find the protected path
-    function ismacrocall(expr::Expr, symbol::Symbol)::Bool
-        if expr.head === :macrocall
-            if expr.args[1] === symbol
-                return true
-            elseif (
-                expr.args[1] isa Expr &&
-                expr.args[1].head === :. &&
-                expr.args[1].args[2] isa QuoteNode &&
-                expr.args[1].args[2].value === symbol
-            )
-                return true
-            end # if ===; elseif
-        end # if ===
-        return false
+    if expr.head !== :call
+        throw(ArgumentError("@safe_save only works with function calls."))
     end
-    findpath(_)::Vector = []
-    function findpath(expr::Expr)::Vector
-        found = []
-        if ismacrocall(expr, Symbol("@protect_str"))
-            dump(expr)
-            push!(found, expr.args[3])
-        else # recursively search args
-            for arg in expr.args
-                got = findpath(arg)
-                append!(found, got)
-            end # for arg
-        end # if ==
-        return found
-    end # function findpath
-    paths = findpath(expr)
-    if length(paths) == 0
-        throw(ArgumentError("No path string is marked with `protect\"\"` macro in the expression."))
-    elseif length(paths) > 1
-        throw(
-            ArgumentError(
-                "Multiple path strings are marked with `protect\"\"` macro in the expression. Only one is allowed."
-            )
-        )
-    end
-    path = only(paths)
-    # generate code
-    return quote
-        if isfile($path)
-            modified = Dates.format(
-                TZ.astimezone(
-                    TZ.ZonedDateTime(Dates.unix2datetime(mtime($path)), TZ.tz"UTC"),
-                    TZ.localzone()
-                ),
-                Dates.dateformat"on d u Y at HH:MM:SS"
-            ) # Dates.format
-            nameext = splitext($path)
-            newpath = string(nameext[1], '_', reprhex(unique_id()), nameext[2])
-            @warn "File $path already exists. Last modified $modified. The EXISTING file has been renamed to $newpath."
-            mv($path, newpath)
-        end # if isfile
-        $expr
-    end
+    protect_call = Expr(:call, :protect, expr.args[1]) # TODO
 end
 
 """
@@ -272,7 +264,7 @@ julia> save("Hello again", "./greating.jld2")
 ```
 """
 @generated save(obj, path::String=joinpath(pwd(), string(reprhex(unique_id()), ".jld2")); kwargs...)::String =
-    @safe_save unsafe_save(obj, @protect_str(path); spwarn=true, kwargs...)
+    @safe_save unsafe_save(obj, @protect_str(path); spwarn=true, kwargs...) # TODO
 
 function unsafe_load(path::String; spwarn::Bool=false)
     if !spwarn
