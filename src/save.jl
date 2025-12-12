@@ -1,11 +1,20 @@
 module Save # SafeIO.
 
+using ..Utils
 import UUIDs, JLD2, Dates, CRC32c as CRC, TimeZones as TZ
 
 export ProtectedPath
 export @safe_save
 export protect, save_object
 
+"""
+    ProtectedPath <: AbstractString
+
+A wrapper type for file paths that indicates the path should be protected in the
+`@safe_save` macro.
+
+See also [`@safe_save`](@ref).
+"""
 struct ProtectedPath <: AbstractString
     path::String
     ProtectedPath(path::AbstractString) = new(String(path))
@@ -14,7 +23,7 @@ end # struct ProtectedPath
 Base.iterate(p::ProtectedPath) = iterate(p.path)
 Base.iterate(p::ProtectedPath, i::Int) = iterate(p.path, i)
 
-function unsafe_save_object(obj, path::String; spwarn::Bool=false)::String
+function unsafe_save_object(obj, path::AbstractString; spwarn::Bool=false)::AbstractString
     if !spwarn
         @warn "`unsafe_save` may overwrite existing files. Use `save` instead."
     end # if !
@@ -22,6 +31,31 @@ function unsafe_save_object(obj, path::String; spwarn::Bool=false)::String
     return path
 end # function unsafe_save_object
 
+"""
+    protect(savefunc::Function, path::AbstractString, args...; kwargs...) -> Bool
+
+Protect the file at `path` when performing `savefunc(path, args...; kwargs...)`. If a file
+already exists at `path` and is modified during the save operation, the original file is
+backuped to a new file with a unique identifier appended to its name. Returns `true` if a
+file was protected, `false` otherwise.
+
+See also [`@safe_save`](@ref).
+
+# Examples
+```julia-repl
+julia> protect("./greating.txt", "Hello World") do path, content
+           write(path, content)
+       end
+false
+
+julia> protect("./greating.txt", "Hello Again") do path, content
+           write(path, content)
+       end
+┌ Warning: File ./greating.txt already exists. Last modified on 12 Dec 2025 at 19:02:12. The EXISTING file has been renamed to ./greating_e7c4a63a.txt.
+└ @ SafeIO.Save src/save.jl:75
+true
+```
+"""
 function protect(savefunc::Function, path::AbstractString, args...; kwargs...)::Bool
     # prepare
     pflag = false
@@ -65,6 +99,7 @@ function protect(savefunc::Function, path::AbstractString, args...; kwargs...)::
     return pflag
 end # function protect
 
+#TODO VVVVVVVVVVVVVVVVVVVVVVVVVV
 macro safe_save(expr::Expr)
     # check call
     if expr.head !== :call
@@ -118,6 +153,6 @@ julia> save_object("Hello again", "./greating.jld2")
 ```
 """
 save_object(obj, path::AbstractString=joinpath(pwd(), string(reprhex(unique_id()), ".jld2")))::Bool =
-    @safe_save unsafe_save_object(obj, ProtectedPath(path); spwarn=true)
+    protect((path, obj; spwarn) -> unsafe_save_object(obj, path; spwarn), path, obj; spwarn=true)
 
 end # module Save
