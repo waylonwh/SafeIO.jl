@@ -14,11 +14,14 @@ UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 CRC32c = "1.10.10"
 Dates = "1.10.10"
 JLD2 = "0.6.3"
+Logging = "1.10.10"
+Test = "1.10.10"
 TimeZones = "1.22.2"
 UUIDs = "1.10.10"
 
 [extras]
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test"]
+test = ["Logging", "Test"]

@@ -35,7 +35,7 @@ julia> protect("./greating.txt") do path
            write(path, "Hello Again!")
        end
 ┌ Warning: File ./greating.txt already exists. Last modified on 14 Dec 2025 at 00:27:19. The EXISTING file has been renamed to ./greating_e7c4a63a.txt.
-└ @ SafeIO.Save src/save.jl:79
+└ @ SafeIO.Save src/save.jl:83
 12
 ```
 """
@@ -69,7 +69,10 @@ function protect(iofunc::Function, path::AbstractString)
             warnmsg = (open(CRC.crc32c, path) == filehash) ?
                 "The file remains unchanged. However, a backup copy has been saved to $tempath." :
                 "The file has been MODIFIED."
-            @warn string("An error occurred during saving. ", warnmsg)
+            @warn string(
+                "An error occurred during executing the function, and a file exists at the given path. ",
+                warnmsg
+            )
         end
         rethrow(err)
     finally # rename existing file if changed
@@ -116,7 +119,7 @@ julia> @protect write(Protected("./greating.txt"), "Hello World")
 
 julia> @protect write(Protected("./greating.txt"), "Hello Again!")
 ┌ Warning: File ./greating.txt already exists. Last modified on 13 Dec 2025 at 00:40:00. The EXISTING file has been renamed to ./greating_1689874a.txt.
-└ @ SafeIO.Save src/save.jl:79
+└ @ SafeIO.Save src/save.jl:83
 12
 ```
 """
@@ -145,7 +148,7 @@ macro protect(expr::Expr)
     elseif length(paths) > 1
         throw(ArgumentError("Multiple Protected found in the expression. Only one is allowed."))
     end # if ==,elseif
-    path = only(paths)
+    path = only(paths) # (safe)
     # construct protected call
     return esc(:(protect(_ -> $expr, $path)))
 end # macro protect
@@ -163,11 +166,13 @@ julia> save_object("Hello World", "./greating.jld2")
 
 julia> save_object("Hello Again!", "./greating.jld2")
 ┌ Warning: File ./greating.jld2 already exists. Last modified on 13 Dec 2025 at 00:48:04. The EXISTING file has been renamed to ./greating_38ff9f7a.jld2.
-└ @ SafeIO.Save src/save.jl:79
+└ @ SafeIO.Save src/save.jl:83
 "./greating.jld2"
 ```
 """
 save_object(obj, path::AbstractString=joinpath(pwd(), string(reprhex(unique_id()), ".jld2")))::AbstractString =
-    protect((path, obj; spwarn) -> unsafe_save_object(obj, path; spwarn), path, obj; spwarn=true)
+    protect(path) do path
+        unsafe_save_object(obj, path; spwarn=true)
+    end # protect do path
 
 end # module Save
