@@ -16,31 +16,30 @@ function unsafe_save_object(obj, path::AbstractString; spwarn::Bool=false)::Abst
 end # function unsafe_save_object
 
 """
-    protect(savefunc::Function, path::AbstractString, args...; kwargs...)
+    protect(iofunc::Function, path::AbstractString)
 
-Protect the file at `path` when performing `savefunc(path, args...; kwargs...)`. If a file
-already exists at `path` and is modified during the save operation, the original file is
-backuped to a new file with a unique identifier appended to its name. Returns the value
-returned by `savefunc`.
+Protect the file at `path` when execute `iofunc(path)`. If a file already exists at `path`
+and is modified during the execution, the original file is backed up to a new file with a
+unique identifier appended to its name. Returns the value returned by `iofunc`.
 
 See also [`@protect`](@ref).
 
 # Examples
 ```julia-repl
-julia> protect("./greating.txt", "Hello World") do path, content
-           write(path, content)
+julia> protect("./greating.txt") do path
+           write(path, "Hello World")
        end
 11
 
-julia> protect("./greating.txt", "Hello Again!") do path, content
-           write(path, content)
+julia> protect("./greating.txt") do path
+           write(path, "Hello Again!")
        end
-┌ Warning: File ./greating.txt already exists. Last modified on 12 Dec 2025 at 19:02:12. The EXISTING file has been renamed to ./greating_e7c4a63a.txt.
-└ @ SafeIO.Save src/save.jl:71
+┌ Warning: File ./greating.txt already exists. Last modified on 14 Dec 2025 at 00:27:19. The EXISTING file has been renamed to ./greating_e7c4a63a.txt.
+└ @ SafeIO.Save src/save.jl:79
 12
 ```
 """
-function protect(savefunc::Function, path::AbstractString, args...; kwargs...)
+function protect(iofunc::Function, path::AbstractString)
     # prepare
     pflag = false
     if isfile(path)
@@ -63,7 +62,17 @@ function protect(savefunc::Function, path::AbstractString, args...; kwargs...)
     end # if pflag
     # perform save
     try # save and handle existing file
-        val = savefunc(path, args...; kwargs...)
+        val = iofunc(path)
+        return val
+    catch err
+        if pflag
+            warnmsg = (open(CRC.crc32c, path) == filehash) ?
+                "The file remains unchanged. However, a backup copy has been saved to $tempath." :
+                "The file has been MODIFIED."
+            @warn string("An error occurred during saving. ", warnmsg)
+        end
+        rethrow(err)
+    finally # rename existing file if changed
         if pflag && open(CRC.crc32c, path) != filehash # file changed
             cp(tempath, newpath)
             rm(tempath)
@@ -71,16 +80,7 @@ function protect(savefunc::Function, path::AbstractString, args...; kwargs...)
                 "File $(path) already exists. Last modified $modified. The EXISTING file has been renamed to $newpath."
             )
         end # if pflag
-        return val
-    catch err
-        if pflag
-            warnmsg = (open(CRC.crc32c, path) == filehash) ?
-                "The file remains unchanged. However, a backup copy has been saved to $tempath." :
-                "The file has been MODIFIED. The existing file has been backed up to $tempath. Retrieve timely if needed."
-            @warn string("An error occurred during saving. ", warnmsg)
-        end
-        rethrow(err)
-    end # try,catch
+    end # try, catch, finally
 end # function protect
 
 """
@@ -116,7 +116,7 @@ julia> @protect write(Protected("./greating.txt"), "Hello World")
 
 julia> @protect write(Protected("./greating.txt"), "Hello Again!")
 ┌ Warning: File ./greating.txt already exists. Last modified on 13 Dec 2025 at 00:40:00. The EXISTING file has been renamed to ./greating_1689874a.txt.
-└ @ SafeIO.Save src/save.jl:70
+└ @ SafeIO.Save src/save.jl:79
 12
 ```
 """
@@ -147,12 +147,7 @@ macro protect(expr::Expr)
     end # if ==,elseif
     path = only(paths)
     # construct protected call
-    if expr.args[2] isa Expr && expr.args[2].head === :parameters # call has ;
-        protect_call = Expr(:call, :protect, expr.args[2], expr.args[1], expr.args[3:end]...)
-    else # no ;
-        protect_call = Expr(:call, :protect, expr.args[1], expr.args[2:end]...)
-    end # if &&,else
-    return protect_call
+    return esc(:(protect(_ -> $expr, $path)))
 end # macro protect
 
 """
@@ -168,7 +163,7 @@ julia> save_object("Hello World", "./greating.jld2")
 
 julia> save_object("Hello Again!", "./greating.jld2")
 ┌ Warning: File ./greating.jld2 already exists. Last modified on 13 Dec 2025 at 00:48:04. The EXISTING file has been renamed to ./greating_38ff9f7a.jld2.
-└ @ SafeIO.Save src/save.jl:70
+└ @ SafeIO.Save src/save.jl:79
 "./greating.jld2"
 ```
 """
