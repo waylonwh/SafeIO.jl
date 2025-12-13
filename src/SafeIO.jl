@@ -7,9 +7,9 @@ include("load.jl")
 using .Utils, .Save, .Load
 
 # Save
-export ProtectedPath
-export @safe_save
-export protect, save_object
+export protect
+export Protected, @protect
+export save_object
 # Load
 export safe_assign!, @safe_assign
 export safehouse, house!, retrieve

@@ -3,7 +3,7 @@ module Save # SafeIO.
 using ..Utils
 import UUIDs, JLD2, Dates, CRC32c as CRC, TimeZones as TZ
 
-export ProtectedPath
+export Protected
 export @protect
 export protect, save_object
 
@@ -84,37 +84,37 @@ function protect(savefunc::Function, path::AbstractString, args...; kwargs...)
 end # function protect
 
 """
-    ProtectedPath <: AbstractString
+    Protected <: AbstractString
 
 A wrapper type for file paths that indicates the path should be protected in the
 `@protect` macro. The constructor must be called when using `@protect`.
 
 See also [`@protect`](@ref).
 """
-struct ProtectedPath <: AbstractString
+struct Protected <: AbstractString
     path::String
-    ProtectedPath(path::AbstractString) = new(String(path))
-end # struct ProtectedPath
+    Protected(path::AbstractString) = new(String(path))
+end # struct Protected
 
-Base.iterate(p::ProtectedPath) = iterate(p.path)
-Base.iterate(p::ProtectedPath, i::Int) = iterate(p.path, i)
+Base.iterate(p::Protected) = iterate(p.path)
+Base.iterate(p::Protected, i::Int) = iterate(p.path, i)
 
 """
-    @protect function_call(..., ProtectedPath("path/to/file"), ...)
+    @protect function_call(..., Protected("path/to/file"), ...)
 
-Perform `function_call` while protecting the file at the specified `ProtectedPath` in the
-call, which is done by invoking `protect`. Only one `ProtectedPath` is allowed in the
-expression. `ProtectedPath` must be called when using the macro. Passing an instance of
-`ProtectedPath` directly will result in an error.
+Perform `function_call` while protecting the file at the specified `Protected` path in the
+call, which is done by invoking `protect`. Only one `Protected` is allowed in the
+expression. `Protected` must be called when using the macro. Passing an instance of
+`Protected` directly will result in an error.
 
 See also [`protect`](@ref), [`save_object`](@ref).
 
 # Examples
 ```julia-repl
-julia> @protect write(ProtectedPath("./greating.txt"), "Hello World")
+julia> @protect write(Protected("./greating.txt"), "Hello World")
 11
 
-julia> @protect write(ProtectedPath("./greating.txt"), "Hello Again!")
+julia> @protect write(Protected("./greating.txt"), "Hello Again!")
 ┌ Warning: File ./greating.txt already exists. Last modified on 13 Dec 2025 at 00:40:00. The EXISTING file has been renamed to ./greating_1689874a.txt.
 └ @ SafeIO.Save src/save.jl:70
 12
@@ -125,11 +125,11 @@ macro protect(expr::Expr)
     if expr.head !== :call
         throw(ArgumentError("@protect only works with function calls."))
     end # if !==
-    # find ProtectedPath
+    # find Protected
     findpath(_)::Vector{Expr} = Expr[]
     function findpath(expr::Expr)::Vector{Expr}
         found = Expr[]
-        if expr.head === :call && expr.args[1] === :ProtectedPath
+        if expr.head === :call && expr.args[1] === :Protected
             push!(found, expr)
         else # recursively search args
             for arg in expr.args
@@ -141,9 +141,9 @@ macro protect(expr::Expr)
     end # function findpath
     paths = findpath(expr)
     if length(paths) == 0
-        throw(ArgumentError("No ProtectedPath found in the expression."))
+        throw(ArgumentError("No Protected found in the expression."))
     elseif length(paths) > 1
-        throw(ArgumentError("Multiple ProtectedPath found in the expression. Only one is allowed."))
+        throw(ArgumentError("Multiple Protected found in the expression. Only one is allowed."))
     end # if ==,elseif
     path = only(paths)
     # construct protected call

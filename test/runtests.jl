@@ -52,7 +52,7 @@ end
         @test read(path, String) == hello_again
     end
 
-    @testset "ProtectedPath" begin
+    @testset "Protected" begin
 
     end
 
