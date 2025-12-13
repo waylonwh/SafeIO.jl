@@ -4,7 +4,7 @@ using ..Utils
 import UUIDs, JLD2, Dates, CRC32c as CRC, TimeZones as TZ
 
 export ProtectedPath
-export @safe_save
+export @protect
 export protect, save_object
 
 function unsafe_save_object(obj, path::AbstractString; spwarn::Bool=false)::AbstractString
@@ -23,7 +23,7 @@ already exists at `path` and is modified during the save operation, the original
 backuped to a new file with a unique identifier appended to its name. Returns the value
 returned by `savefunc`.
 
-See also [`@safe_save`](@ref).
+See also [`@protect`](@ref).
 
 # Examples
 ```julia-repl
@@ -87,9 +87,9 @@ end # function protect
     ProtectedPath <: AbstractString
 
 A wrapper type for file paths that indicates the path should be protected in the
-`@safe_save` macro. The constructor must be called when using `@safe_save`.
+`@protect` macro. The constructor must be called when using `@protect`.
 
-See also [`@safe_save`](@ref).
+See also [`@protect`](@ref).
 """
 struct ProtectedPath <: AbstractString
     path::String
@@ -100,7 +100,7 @@ Base.iterate(p::ProtectedPath) = iterate(p.path)
 Base.iterate(p::ProtectedPath, i::Int) = iterate(p.path, i)
 
 """
-    @safe_save function_call(..., ProtectedPath("path/to/file"), ...)
+    @protect function_call(..., ProtectedPath("path/to/file"), ...)
 
 Perform `function_call` while protecting the file at the specified `ProtectedPath` in the
 call, which is done by invoking `protect`. Only one `ProtectedPath` is allowed in the
@@ -111,19 +111,19 @@ See also [`protect`](@ref), [`save_object`](@ref).
 
 # Examples
 ```julia-repl
-julia> @safe_save write(ProtectedPath("./greating.txt"), "Hello World")
+julia> @protect write(ProtectedPath("./greating.txt"), "Hello World")
 11
 
-julia> @safe_save write(ProtectedPath("./greating.txt"), "Hello Again!")
+julia> @protect write(ProtectedPath("./greating.txt"), "Hello Again!")
 ┌ Warning: File ./greating.txt already exists. Last modified on 13 Dec 2025 at 00:40:00. The EXISTING file has been renamed to ./greating_1689874a.txt.
 └ @ SafeIO.Save src/save.jl:70
 12
 ```
 """
-macro safe_save(expr::Expr)
+macro protect(expr::Expr)
     # check call
     if expr.head !== :call
-        throw(ArgumentError("@safe_save only works with function calls."))
+        throw(ArgumentError("@protect only works with function calls."))
     end # if !==
     # find ProtectedPath
     findpath(_)::Vector{Expr} = Expr[]
@@ -153,7 +153,7 @@ macro safe_save(expr::Expr)
         protect_call = Expr(:call, :protect, expr.args[1], expr.args[2:end]...)
     end # if &&,else
     return protect_call
-end # macro safe_save
+end # macro protect
 
 """
     save_object(obj, path::AbstractString=joinpath(pwd(), string(reprhex(unique_id()), ".jld2")))::Bool
