@@ -56,6 +56,8 @@ end # function Base.show
 A `Safehouse` holds `Refugee`s of variables from module `M`. It should live in the same
 module `M`.
 
+Use function `retrieve` or syntax `Safehouse[]` to get `Refugee`s from a `Safehouse`.
+
 Use `empty!(safehouse)` to clear all stored `Refugee`s from the safehouse.
 
 See also [`Refugee`](@ref), ['safehouse'](@ref), [`house!`](@ref), and [`retrieve`](@ref).
@@ -76,6 +78,9 @@ function Base.empty!(house::Safehouse{M}) where M
     empty!(house.refugees)
     return house
 end
+
+(Base.getindex(house::Safehouse{M}, var::Symbol)::Vector{Refugee{M}}) where M = retrieve(var, house)
+(Base.getindex(house::Safehouse{M}, id::UInt32)::Refugee{M}) where M = retrieve(id, house)
 
 (Base.show(io::IO, safehouse::Safehouse{M})::Nothing) where M = print(
     io,
@@ -161,15 +166,15 @@ function house!(var::Symbol, safehouse::Safehouse{M}=safehouse())::Refugee{M} wh
 end # function house!
 
 """
-    retrieve(id::UInt32, safehouse::Safehouse{M}=safehouse()) ->Refugee{M}
+    retrieve(id::UInt32, safehouse::Safehouse{M}=safehouse()) -> Refugee{M}
 
 Retrieve the `Refugee` with the specified `id` from the given `safehouse` defined in module
-`M`.
+`M`. Syntax `Safehouse[::UInt32]` can also be used.
 
     retrieve(var::Symbol, safehouse::Safehouse{M}=safehouse()) -> Vector{Refugee{M}}
 
 Retrieve all `Refugee`s of the variable `var` from the specified `safehouse` defined in
-module `M`.
+module `M`. Syntax `Safehouse[::Symbol]` can also be used.
 
 Use syntax `Refugee[]` to access the value stored in a `Refugee`.
 

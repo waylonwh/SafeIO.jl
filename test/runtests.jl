@@ -2,7 +2,6 @@ using Test, SafeIO
 import Logging as Log
 import JLD2
 
-
 @testset "Utils" begin
     @testset "unique_id" begin
         id = SafeIO.Utils.unique_id()
@@ -15,45 +14,45 @@ import JLD2
     end # begin "reprhex"
 end # begin "Utils"
 
+const hello_world = "Hello World"
+const hello_again = "Hello Again!"
+
+# Helper macros for Save tests
+macro tempdirpath()
+    return esc(
+        quote
+            dir = mktempdir()
+            path = joinpath(dir, "greating.dat")
+        end # quote
+    ) # esc(
+end # macro tempdirpath
+
+macro test_1st_save()
+    return esc(
+        quote
+            @test world_ret == length(hello_world)
+            @test read(path, String) == hello_world
+        end # quote
+    ) # esc(
+end # macro test_1st_save
+
+macro test_2nd_save()
+    return esc(
+        quote
+            files = readdir(dir)
+            @test length(files) == 2
+            for f in files
+                filename = splitdir(f)[2]
+                @test occursin(r"greating(_[0-9a-f]{8})?\.dat", filename)
+            end # for f
+            newfile = only(filter(startswith("greating_"), files))
+            @test read(joinpath(dir, newfile), String) == hello_world
+            @test read(path, String) == hello_again
+        end # quote
+    ) # esc(
+end # macro test_2nd_save
 
 @testset "Save" begin
-    hello_world = "Hello World"
-    hello_again = "Hello Again!"
-
-    macro tempdirpath() # TODO can't be found
-        return esc(
-            quote
-                dir = mktempdir()
-                path = joinpath(dir, "greating.dat")
-            end # quote
-        ) # esc(
-    end # macro tempdirpath
-
-    macro test_1st_save()
-        return esc(
-            quote
-                @test world_ret == length(hello_world)
-                @test read(path, String) == hello_world
-            end # quote
-        ) # esc(
-    end # macro test_1st_save
-
-    macro test_2nd_save()
-        return esc(
-            quote
-                files = readdir(dir)
-                @test length(files) == 2
-                for f in files
-                    filename = splitdir(f)[2]
-                    @test occursin(r"greating(_[0-9a-f]{8})?\.dat", filename)
-                end # for f
-                newfile = only(filter(startswith("greating_"), files))
-                @test read(joinpath(dir, newfile), String) == hello_world
-                @test read(path, String) == hello_again
-            end # quote
-        ) # esc(
-    end # macro test_2nd_save
-
     @testset "unsafe_save_objct" begin
         path = tempname(; suffix=".jld2")
         strobj = "Hello Unsafe World"
@@ -121,12 +120,12 @@ end # begin "Utils"
         @test_logs (:warn, Regex(string(warnmeg, raw".*$"))) @protect write(Protected(path), hello_again)
         @test_2nd_save
         # not a call
-        @test_throws "@protect only works with function calls." @protect x = nothing
+        @test_throws "@protect only works with function calls." @macroexpand @protect x = nothing
         # no or multiple Protected
-        @test_throws "No Protected found in the expression." @protect write(path, hello_world)
+        @test_throws "No Protected found in the expression." @macroexpand @protect write(path, hello_world)
         @test_throws(
             "Multiple Protected found in the expression. Only one is allowed.",
-            @protect write(Protected(path), Protected(path))
+            @macroexpand @protect write(Protected(path), Protected(path))
         )
     end # begin "@protect"
 
@@ -142,7 +141,50 @@ end # begin "Utils"
     end # begin "save_object"
 end # begin "Save"
 
+module LoadTest
+    hello_world = "Hello World"
+end # module LoadTest
 
 @testset "Load" begin
+    @testset "Refugee" begin
+        @eval LoadTest val = $hello_world
+        refugee = SafeIO.Load.Refugee{LoadTest}(:val)
+        @test refugee.varname === :val
+        @test refugee[] == refugee.val
+        @test refugee[] == hello_world
+    end # begin "Refugee"
 
+    @testset "Safehouse, safehouse, house!, retrieve" begin
+        SafeIO.Load.Safehouse{LoadTest}(:TESTHOUSE)
+        @test isdefined(LoadTest, :TESTHOUSE)
+        @test safehouse(LoadTest, :TESTHOUSE) === LoadTest.TESTHOUSE
+        safehouse(LoadTest, :NEWHOUSE)
+        @test isdefined(LoadTest, :NEWHOUSE)
+        for _ in 1:2
+            house!(:hello_world, LoadTest.TESTHOUSE)
+        end # for 1:2
+        @test keys(LoadTest.TESTHOUSE.variables) == Set([:hello_world])
+        @test length(LoadTest.TESTHOUSE.variables[:hello_world]) == 2
+        @test keys(LoadTest.TESTHOUSE.refugees) == Set(LoadTest.TESTHOUSE.variables[:hello_world])
+        for (id, refu) in LoadTest.TESTHOUSE.refugees
+            @test refu.varname === :hello_world
+            @test refu.id == id
+            @test refu[] == hello_world
+        end # for refu
+        @test LoadTest.TESTHOUSE[:hello_world] == retrieve(:hello_world, LoadTest.TESTHOUSE)
+        anid = first(keys(LoadTest.TESTHOUSE.refugees))
+        @test LoadTest.TESTHOUSE[anid] == retrieve(anid, LoadTest.TESTHOUSE)
+        @test length(retrieve(:hello_world, LoadTest.TESTHOUSE)) == 2
+        for refu in retrieve(:hello_world, LoadTest.TESTHOUSE)
+            @test refu.varname === :hello_world
+        end # for refu
+        @test retrieve(anid, LoadTest.TESTHOUSE) === LoadTest.TESTHOUSE.refugees[anid]
+        empty!(LoadTest.TESTHOUSE)
+        @test isempty(LoadTest.TESTHOUSE.variables)
+        @test isempty(LoadTest.TESTHOUSE.refugees)
+    end # begin "Safehouse, safehouse, house!, retrieve"
+
+    @testset "unsafe_load_object" begin
+
+    end # begin "unsafe_load_object"
 end # begin "Load"
