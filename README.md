@@ -1,5 +1,7 @@
 # SafeIO.jl
 
+[![CI](https://github.com/waylonwh/SafeIO.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/waylonwh/SafeIO.jl/actions/workflows/CI.yml)
+
 A Julia package for safe file I/O operations that protects against accidental data loss by automatically backing up existing files and variables before overwriting.
 
 ## Features
