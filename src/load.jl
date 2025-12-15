@@ -225,12 +225,12 @@ const keywords::NTuple{29,Symbol} = (
 )
 
 """
-    safe_assign!(to::Symbol, val, modu::Module=Main; house::Symbol=:SAFEHOUSE, force::Bool=false)
+    safe_assign!(to::Symbol, val, modu::Module=Main; house::Symbol=:SAFEHOUSE, constant::Bool=false)
 
 Assign the value `val` to the variable `to` in module `modu`. If a variable named `to`
 already exists in `modu`, its value is copied to the safehouse specified by `house` before
-assigning the new value. If `to` is a constant variable, an error is thrown unless
-`force=true` is provided. `to` must be a valid variable name.
+assigning the new value. `to` must be a valid variable name. `to` would be assigned as a
+constant variable if `constant=true`.
 
 See also [`Safehouse`](@ref), [`@safe_assign`](@ref).
 
@@ -253,7 +253,7 @@ SafeIO.Load.Safehouse{Main} with 1 refugees in 1 variables:
 
 julia> const y = 3;
 
-julia> safe_assign!(:y, 4; force=true)
+julia> safe_assign!(:y, 4; constant=true)
 ┌ Warning: Assigning to constant variable y in Main.
 └ @ SafeIO.Load src/load.jl:272
 ┌ Warning: Variable y already defined in Main. The existing value has been stored in safehouse Main.SAFEHOUSE with ID 0xf3632d2a.
@@ -262,17 +262,17 @@ julia> safe_assign!(:y, 4; force=true)
 ```
 """
 function safe_assign!(
-    to::Symbol, val, modu::Module=Main; house::Symbol=:SAFEHOUSE, force::Bool=false
+    to::Symbol, val, modu::Module=Main; house::Symbol=:SAFEHOUSE, constant::Bool=false
 )
     if !Base.isidentifier(to) || to in keywords
         throw(ArgumentError("'$to' is not a valid variable name."))
     end # if !
     if isconst(modu, to)
-        if force
+        if constant
             @warn "Assigning to constant variable $to in $modu."
-        else # !force
-            throw(ArgumentError("Variable $to in $modu is a constant. Use `force=true` to overwrite it."))
-        end # if force, else
+        else # !constant
+            throw(ArgumentError("Variable $to in $modu is a constant. Use `constant=true` to overwrite it."))
+        end # if constant, else
     end # if isconst
     if isdefined(modu, to)
         refugee = house!(to, safehouse(modu, house))
@@ -280,18 +280,22 @@ function safe_assign!(
             "Variable $to already defined in $modu. The existing value has been stored in safehouse $modu.$house with ID $(reprhex(refugee.id, true))."
         )
     end # if isdefined
-    isconst(modu, to) ? @eval(modu, const $to = $val) : @eval(modu, $to = $val)
+    constant ? @eval(modu, const $to = $val) : @eval(modu, $to = $val)
     return val
 end # function safe_assign!
 
 """
-    @safe_assign [const] [global] var = value [house=:SAFEHOUSE]
+    @safe_assign [const] [global] var = value
+    @safe_assign ([const] [global] var = value; :SAFEHOUSE)
 
-A macro that performs an assignment of the form `[const] var = value`. If `var` already
-exists in the current module, its value is copied to the safehouse specified by `house`
-before assigning the new value.
+A macro that performs an assignment of the form `[const] [global] var = value`. If `var`
+already exists in the current module, its value is copied to the safehouse specified by
+`house` before assigning the new value. If a safehouse is to be specified, use the second
+form of syntax: wrap the expression in parentheses and provide the safehouse name as a
+`Symbol` after a semicolon. Interpolating variable names or values using `\$` is not
+supported.
 
-!!! note
+!!! note "Global scope only"
     `@safe_assign` always executes assignments in the global scope of the current module.
     Hence adding the `global` keyword is a null operation, and adding the `local` keyword
     is not allowed.
@@ -303,36 +307,58 @@ See also [`safe_assign!`](@ref).
 julia> @safe_assign x = 1
 1
 
-julia> @safe_assign x = 2
-┌ Warning: Variable x already defined in Main. The existing value has been stored in safehouse Main.SAFEHOUSE with ID 0x6b36583a.
-└ @ SafeIO.Load src/load.jl:280
+julia> @safe_assign (x = 2; :MY_SAFEHOUSE)
+┌ Warning: Variable x already defined in Main. The existing value has been stored in safehouse Main.MY_SAFEHOUSE with ID 0xa7fbb3d0.
+└ @ SafeIO.Load src/load.jl:279
 2
 
-julia> SAFEHOUSE
+julia> MY_SAFEHOUSE
 SafeIO.Load.Safehouse{Main} with 1 refugees in 1 variables:
-  SafeIO.Load.Refugee{Main}(x#6b36583a = 1)
+  SafeIO.Load.Refugee{Main}(x#a7fbb3d0 = 1)
 
 julia> const y = 3;
 
 julia> @safe_assign const y = 4
 ┌ Warning: Assigning to constant variable y in Main.
 └ @ SafeIO.Load src/load.jl:272
-┌ Warning: Variable y already defined in Main. The existing value has been stored in safehouse Main.SAFEHOUSE with ID 0x894999d6.
-└ @ SafeIO.Load src/load.jl:280
+┌ Warning: Variable y already defined in Main. The existing value has been stored in safehouse Main.SAFEHOUSE with ID 0xa8900f9e.
+└ @ SafeIO.Load src/load.jl:279
 4
 ```
 """
-macro safe_assign(expr::Expr, house::QuoteNode=QuoteNode(:SAFEHOUSE))
-    @show expr
-    if expr.head === :local
+macro safe_assign(expr::Expr)
+    if expr.head === :block # safehouse provided
+        valid = (2 <= length(expr.args) <= 3) ? true : false
+        assignment = nothing
+        house = nothing
+        for arg in expr.args
+            if arg isa Expr
+                assignment = arg
+            elseif arg isa QuoteNode
+                house = arg
+            end # if isa, elseif
+        end # for arg
+        if isnothing(assignment) || isnothing(house)
+            valid = false
+        end # if ||
+        if !valid
+            throw(
+                ArgumentError("Invalid expression for @safe_assign macro. See documentation for correct usage.")
+            )
+        end # if !
+    else # no safehouse provided
+        house = QuoteNode(:SAFEHOUSE)
+        assignment = expr
+    end # if ===, else
+    if assignment.head === :local
         throw(ArgumentError("@safe_assign does not support local variable assignments."))
-    end
-    if expr.head === :const
+    end # if ===
+    if assignment.head === :const
         constant = true
-        assignment = expr.args[1]
+        assignment = assignment.args[1]
     else # not const
         constant = false
-        assignment = expr
+        assignment = assignment
     end # if ===, else
     assignment = (assignment.head === :global) ? assignment.args[1] : assignment
     if assignment.head !== :(=)
@@ -341,10 +367,9 @@ macro safe_assign(expr::Expr, house::QuoteNode=QuoteNode(:SAFEHOUSE))
     callexpr = :(
         safe_assign!(
             $(QuoteNode(assignment.args[1])), $(assignment.args[2]), $__module__;
-            house=$house, force=$constant
+            house=$house, constant=$constant
         )
     )
-    @show callexpr
     return esc(callexpr)
 end # macro safe_assign
 

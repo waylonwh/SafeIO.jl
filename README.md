@@ -31,17 +31,28 @@ using SafeIO
 
 ### Protected File Saving
 
-Use `@safe_save` to protect files from being accidentally overwritten:
+Use `@protect` or `protect` to protect files from being accidentally overwritten:
 
 ```julia
 # First save - creates the file
-@safe_save write(ProtectedPath("./greeting.txt"), "Hello World")
+@protect write(Protected("./greeting.txt"), "Hello World")
 
 # Second save - backs up existing file with unique ID before saving
-@safe_save write(ProtectedPath("./greeting.txt"), "Hello Again!")
+@protect write(Protected("./greeting.txt"), "Hello Again!")
 # ┌ Warning: File ./greeting.txt already exists. Last modified on 13 Dec 2025 at 00:40:00.
 # │ The EXISTING file has been renamed to ./greeting_1689874a.txt.
 # └ @ SafeIO.Save src/save.jl:70
+
+# Use function `protect` to perform complex operations while protecting the file
+protect("./greeting.txt") do path
+    io = open(path, "w")
+    write(io, "Hello Once More!")
+    write(io, "\nHave a great day!")
+    close(io)
+end
+# ┌ Warning: File ./greeting.txt already exists. Last modified on 15 Dec 2025 at 18:00:25.
+# │ The EXISTING file has been renamed to ./greeting_726ae51e.txt.
+# └ @ SafeIO.Save src/save.jl:82
 ```
 
 ### Safe Object Storage with JLD2
@@ -78,31 +89,31 @@ SAFEHOUSE
 #   SafeIO.Load.Refugee{Main}(x#6b36583a = 1)
 
 # Retrieve old values
-old_values = retrieve(:x, SAFEHOUSE)
-old_values[1][]  # Access the stored value: 1
+old_values = SAFEHOUSE[:x]
+only(old_values)[]  # Access the stored value: 1
 ```
 
 ## API Reference (AI Generated)
 
 ### Save Module
 
-#### `protect(savefunc::Function, path::AbstractString, args...; kwargs...)`
+#### `protect(iofunc::Function, path::AbstractString)`
 
-Protect a file at `path` when performing a save operation. If the file exists and is modified during the save, the original is backed up with a unique identifier.
+Protect a file at `path` when performing an operation. If the file exists and is modified during the save, the original is backed up with a unique identifier.
 
 ```julia
-protect("./data.txt", "content") do path, content
-    write(path, content)
+protect("./data.txt") do path
+    write(path, "content")
 end
 ```
 
-#### `@safe_save function_call(..., ProtectedPath("path"), ...)`
+#### `@safe_save function_call(..., Protected("path"), ...)`
 
-Macro that wraps any function call to protect the file specified by `ProtectedPath`.
+Macro that wraps any function call to protect the file specified by `Protected`.
 
 ```julia
-@safe_save write(ProtectedPath("./data.txt"), "content")
-@safe_save CSV.write(ProtectedPath("./data.csv"), df)
+@safe_save write(Protected("./data.txt"), "content")
+@safe_save CSV.write(Protected("./data.csv"), df)
 ```
 
 #### `save_object(obj, path::AbstractString)`
@@ -115,7 +126,7 @@ save_object(my_data, "./data.jld2")
 
 ### Load Module
 
-#### `safe_assign!(to::Symbol, val, modu::Module=Main; house=:SAFEHOUSE, force=false)`
+#### `safe_assign!(to::Symbol, val, modu::Module=Main; house=:SAFEHOUSE, constant=false)`
 
 Safely assign a value to a variable, storing any existing value in the safehouse first.
 
@@ -124,13 +135,14 @@ safe_assign!(:x, 42)
 safe_assign!(:x, 100)  # Previous value (42) stored in SAFEHOUSE
 ```
 
-#### `@safe_assign [const] var = value [house=:SAFEHOUSE]`
+#### `@safe_assign [const] [global] var = value` / `@safe_assign ([const] [global] var = value; :SAFEHOUSE)`
 
 Macro for safe assignment expressions.
 
 ```julia
 @safe_assign x = 1
-@safe_assign const y = 2
+@safe_assign (x = 2; :SAFEHOUSE)
+@safe_assign const y = 3
 ```
 
 #### `load_object!(to::Symbol, path::AbstractString, modu::Module=Main)`
@@ -162,12 +174,16 @@ house!(:x, safehouse())  # Store current value of x
 
 Retrieve stored values from the safehouse by ID or variable name.
 
+`Safehouse[::UInt32]` and `Safehouse[::Symbol]` can also be used.
+
 ```julia
 # Get all stored values of variable x
 old_values = retrieve(:x, SAFEHOUSE)
+old_values = SAFEHOUSE[:x]
 
 # Get a specific stored value by ID
 value = retrieve(0xf13f7776, SAFEHOUSE)
+value = SAFEHOUSE[0xf13f7776]
 value[]  # Access the actual value
 ```
 

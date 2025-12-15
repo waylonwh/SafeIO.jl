@@ -158,6 +158,10 @@ module LoadTest
     hello_world = "Hello World"
 end # module LoadTest
 
+macro eval_str(str)
+    return esc(:(eval(Meta.parse($str))))
+end
+
 @testset "Load" begin
     @testset "Refugee" begin
         @eval LoadTest val = $hello_world
@@ -226,7 +230,7 @@ end # module LoadTest
         @test only(safehouse(LoadTest, house)[var])[] == hello_world
         @eval LoadTest const $constvar = $hello_world
         @test_throws(
-            "Variable $constvar in Main.LoadTest is a constant. Use `force=true` to overwrite it.",
+            "Variable $constvar in Main.LoadTest is a constant. Use `constant=true` to overwrite it.",
             safe_assign!(constvar, hello_again, LoadTest; house)
         )
         @test_logs(
@@ -235,7 +239,7 @@ end # module LoadTest
                 :warn,
                 "Variable $constvar already defined in Main.LoadTest. The existing value has been stored in safehouse Main.LoadTest.$house with ID "*r"0x[0-9a-f]{8}\.$"
             ),
-            safe_assign!(constvar, hello_again, LoadTest; house, force=true)
+            safe_assign!(constvar, hello_again, LoadTest; house, constant=true)
         ) # @test_logs(
         @test isconst(LoadTest, constvar)
         @test getproperty(LoadTest, constvar) == hello_again
@@ -259,49 +263,44 @@ end # module LoadTest
         globalvar = :macro_safe_assign_test_global
         constglobal = :macro_safe_assign_test_const_global
         house = :MACRO_SAFE_ASSIGN_TEST_HOUSE
-        macro varr() return :macro_safe_assign_test_var end
-        # @safe_assign(Expr(:(=), var, :hello_world))
-        @safe_assign $var = hello_world # TODO
+        @eval_str "@safe_assign ($var = hello_world; :$house)"
         @test getproperty(Main, var) == hello_world
         @test_logs(
             (
                 :warn,
                 "Variable $var already defined in Main. The existing value has been stored in safehouse Main.$house with ID "*r"0x[0-9a-f]{8}\.$"
             ),
-            @safe_assign Expr(:(=), var, :hello_again)
+            @eval_str "@safe_assign ($var = hello_again; :$house)"
         ) # @test_logs(
         @test getproperty(Main, var) == hello_again
         @test length(safehouse(Main, house).refugees) == 1
         @test only(safehouse(Main, house)[var])[] == hello_world
-        @eval const $constvar = $hello_world
-        @test_throws(
-            "Variable $constvar in Main is a constant. Use `force=true` to overwrite it.",
-            @macroexpand @safe_assign Expr(:(=), constvar, :hello_again)
-        )
+        @eval const $constvar = hello_world
+        @test_throws ArgumentError @eval_str "@safe_assign ($constvar = hello_again; :$house)"
         @test_logs(
             (:warn, "Assigning to constant variable $constvar in Main."),
             (
                 :warn,
                 "Variable $constvar already defined in Main. The existing value has been stored in safehouse Main.$house with ID "*r"0x[0-9a-f]{8}\.$"
             ),
-            @safe_assign Expr(:const, Expr(:(=), constvar, :hello_again))
+            @eval_str "@safe_assign (const $constvar = hello_again; :$house)"
         ) # @test_logs(
         @test isconst(Main, constvar)
         @test getproperty(Main, constvar) == hello_again
         @test length(safehouse(Main, house)[constvar]) == 1
         @test only(safehouse(Main, house)[constvar])[] == hello_world
-        @safe_assign Expr(:global, Expr(:(=), globalvar, :hello_world))
+        @eval_str "@safe_assign (global $globalvar = hello_world; :$house)"
         @test getproperty(Main, globalvar) == hello_world
-        @safe_assign Expr(:const, Expr(:global, Expr(:(=), constglobal, :hello_world)))
+        @eval_str "@safe_assign (const global $constglobal = hello_world; :$house)"
         @test getproperty(Main, constglobal) == hello_world
         @test isconst(Main, constglobal)
         @test_throws(
             "@safe_assign does not support local variable assignments.",
-            @macroexpand @safe_assign Expr(:local, Expr(:(=), var, :hello_world))
+            @eval_str "@macroexpand @safe_assign (local $var = hello_world; :$house)"
         )
         @test_throws(
             "@safe_assign only works with assignment expressions.",
-            @macroexpand @safe_assign safe_assign!(var, hello_world)
+            @eval_str "@macroexpand @safe_assign safe_assign!($var, hello_world)"
         )
     end # begin "@safe_assign"
 
