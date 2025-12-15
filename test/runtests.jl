@@ -54,7 +54,7 @@ end # macro test_2nd_save
 
 @testset "Save" begin
     @testset "unsafe_save_objct" begin
-        path = tempname(; suffix=".jld2")
+        path = tempname() * ".jld2"
         strobj = "Hello Unsafe World"
         SafeIO.Save.unsafe_save_object(strobj, path; spwarn=true)
         @test JLD2.load_object(path) == strobj
@@ -203,7 +203,7 @@ end
     end # begin "Safehouse, safehouse, house!, retrieve"
 
     @testset "unsafe_load_object" begin
-        path = tempname(; suffix=".jld2")
+        path = tempname() * ".jld2"
         JLD2.save_object(path, hello_world)
         @test SafeIO.Load.unsafe_load_object(path; spwarn=true) == hello_world
         @test_logs(
@@ -305,7 +305,7 @@ end
     end # begin "@safe_assign"
 
     @testset "load_object!" begin
-        path = tempname(; suffix=".jld2")
+        path = tempname() * ".jld2"
         var = :func_load_object!_test_var
         house = :FUNC_LOAD_OBJECT!_TEST_HOUSE
         JLD2.save_object(path, hello_world)

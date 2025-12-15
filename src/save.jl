@@ -52,7 +52,7 @@ function protect(iofunc::Function, path::AbstractString)
             Dates.dateformat"on d u Y at HH:MM:SS"
         ) # Dates.format
         nameext = splitext(path)
-        tempath = tempname(; cleanup=false, suffix=nameext[2])
+        tempath = tempname(; cleanup=false) * nameext[2]
         filehash = open(CRC.crc32c, path)
         newpath = string(nameext[1], '_', reprhex(unique_id()), nameext[2])
     end # if isfile
