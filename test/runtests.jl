@@ -5,6 +5,7 @@ import JLD2
 @testset "Utils" begin
     @testset "unique_id" begin
         id = SafeIO.Utils.unique_id()
+        sleep(0.001)
         @test id != SafeIO.Utils.unique_id()
     end # begin "unique_id"
 
