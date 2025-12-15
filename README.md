@@ -16,13 +16,12 @@ A Julia package for safe file I/O operations that protects against accidental da
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/waylonwh/SafeIO.jl")
+Pkg.add("SafeIO")
 ```
 
 Or in the Julia REPL package mode:
-
 ```julia
-pkg> add https://github.com/waylonwh/SafeIO.jl
+pkg> add SafeIO
 ```
 
 ## Quick Start
