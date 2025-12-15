@@ -80,7 +80,7 @@ function protect(iofunc::Function, path::AbstractString)
             cp(tempath, newpath)
             rm(tempath)
             @warn(
-                "File $(path) already exists. Last modified $modified. The EXISTING file has been renamed to $newpath."
+                "File $path already exists. Last modified $modified. The EXISTING file has been renamed to $newpath."
             )
         end # if pflag
     end # try, catch, finally

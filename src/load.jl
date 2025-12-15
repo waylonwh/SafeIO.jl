@@ -73,7 +73,8 @@ struct Safehouse{M}
     end # function Safehouse{M}
 end # struct Safehouse{M}
 
-function Base.empty!(house::Safehouse{M}) where M
+(Base.isempty(house::Safehouse{M})::Bool) where M = isempty(house.refugees)
+function Base.empty!(house::Safehouse{M})::Safehouse{M} where M
     empty!(house.variables)
     empty!(house.refugees)
     return house
@@ -186,15 +187,21 @@ julia> for i in 1:5; global x=i; house!(:x, safehouse()); end
 
 julia> retrieve(:x, SAFEHOUSE)
 5-element Vector{SafeIO.Load.Refugee{Main}}:
- SafeIO.Load.Refugee{Main}(x#f13f6f56 = 1)
- SafeIO.Load.Refugee{Main}(x#f13f7442 = 2)
- SafeIO.Load.Refugee{Main}(x#f13f7578 = 3)
- SafeIO.Load.Refugee{Main}(x#f13f767a = 4)
- SafeIO.Load.Refugee{Main}(x#f13f7776 = 5)
+ SafeIO.Load.Refugee{Main}(x#2a43950a = 1)
+ SafeIO.Load.Refugee{Main}(x#2a439ad2 = 2)
+ SafeIO.Load.Refugee{Main}(x#2a439bae = 3)
+ SafeIO.Load.Refugee{Main}(x#2a439c26 = 4)
+ SafeIO.Load.Refugee{Main}(x#2a439c8a = 5)
 
-julia> y = retrieve(0xf13f7776, SAFEHOUSE)
-SafeIO.Load.Refugee{Main}(x#f13f7776) housed at 2025-12-12T17:15:22.984+11:00:
+julia> SAFEHOUSE[:x] == retrieve(:x, SAFEHOUSE)
+true
+
+julia> y = retrieve(0x2a439c8a, SAFEHOUSE)
+SafeIO.Load.Refugee{Main}(x#2a439c8a) housed at 2025-12-15T10:32:33.353+11:00:
   5
+
+julia> y === SAFEHOUSE[0x2a439c8a]
+true
 
 julia> y[]
 5
@@ -236,8 +243,8 @@ julia> x
 1
 
 julia> safe_assign!(:x, 2)
-┌ Warning: Variable `x` already defined in Main. The existing value has been stored in safehouse `Main.SAFEHOUSE` with ID 0xd236238c.
-└ @ SafeIO.Load src/load.jl:267
+┌ Warning: Variable x already defined in Main. The existing value has been stored in safehouse `Main.SAFEHOUSE` with ID 0xd236238c.
+└ @ SafeIO.Load src/load.jl:280
 2
 
 julia> SAFEHOUSE
@@ -247,10 +254,10 @@ SafeIO.Load.Safehouse{Main} with 1 refugees in 1 variables:
 julia> const y = 3;
 
 julia> safe_assign!(:y, 4; force=true)
-┌ Warning: Assigning to constant variable `y` in Main.
-└ @ SafeIO.Load src/load.jl:260
-┌ Warning: Variable `y` already defined in Main. The existing value has been stored in safehouse `Main.SAFEHOUSE` with ID 0xf3632d2a.
-└ @ SafeIO.Load src/load.jl:267
+┌ Warning: Assigning to constant variable y in Main.
+└ @ SafeIO.Load src/load.jl:272
+┌ Warning: Variable y already defined in Main. The existing value has been stored in safehouse Main.SAFEHOUSE with ID 0xf3632d2a.
+└ @ SafeIO.Load src/load.jl:280
 4
 ```
 """
@@ -262,15 +269,15 @@ function safe_assign!(
     end # if !
     if isconst(modu, to)
         if force
-            @warn "Assigning to constant variable `$to` in $modu."
+            @warn "Assigning to constant variable $to in $modu."
         else # !force
-            throw(ArgumentError("Variable `$to` in $modu is a constant. Use `force=true` to overwrite it."))
+            throw(ArgumentError("Variable $to in $modu is a constant. Use `force=true` to overwrite it."))
         end # if force, else
     end # if isconst
     if isdefined(modu, to)
         refugee = house!(to, safehouse(modu, house))
         @warn(
-            "Variable `$to` already defined in $modu. The existing value has been stored in safehouse `$modu.$house` with ID $(reprhex(refugee.id, true))."
+            "Variable $to already defined in $modu. The existing value has been stored in safehouse $modu.$house with ID $(reprhex(refugee.id, true))."
         )
     end # if isdefined
     isconst(modu, to) ? @eval(modu, const $to = $val) : @eval(modu, $to = $val)
@@ -278,11 +285,16 @@ function safe_assign!(
 end # function safe_assign!
 
 """
-    @safe_assign [global] [const] var = value [house=:SAFEHOUSE]
+    @safe_assign [const] [global] var = value [house=:SAFEHOUSE]
 
 A macro that performs an assignment of the form `[const] var = value`. If `var` already
 exists in the current module, its value is copied to the safehouse specified by `house`
 before assigning the new value.
+
+!!! note
+    `@safe_assign` always executes assignments in the global scope of the current module.
+    Hence adding the `global` keyword is a null operation, and adding the `local` keyword
+    is not allowed.
 
 See also [`safe_assign!`](@ref).
 
@@ -292,8 +304,8 @@ julia> @safe_assign x = 1
 1
 
 julia> @safe_assign x = 2
-┌ Warning: Variable `x` already defined in Main. The existing value has been stored in safehouse `Main.SAFEHOUSE` with ID 0x6b36583a.
-└ @ SafeIO.Load src/load.jl:267
+┌ Warning: Variable x already defined in Main. The existing value has been stored in safehouse Main.SAFEHOUSE with ID 0x6b36583a.
+└ @ SafeIO.Load src/load.jl:280
 2
 
 julia> SAFEHOUSE
@@ -303,19 +315,26 @@ SafeIO.Load.Safehouse{Main} with 1 refugees in 1 variables:
 julia> const y = 3;
 
 julia> @safe_assign const y = 4
-┌ Warning: Assigning to constant variable `y` in Main.
-└ @ SafeIO.Load src/load.jl:260
-┌ Warning: Variable `y` already defined in Main. The existing value has been stored in safehouse `Main.SAFEHOUSE` with ID 0x894999d6.
-└ @ SafeIO.Load src/load.jl:267
+┌ Warning: Assigning to constant variable y in Main.
+└ @ SafeIO.Load src/load.jl:272
+┌ Warning: Variable y already defined in Main. The existing value has been stored in safehouse Main.SAFEHOUSE with ID 0x894999d6.
+└ @ SafeIO.Load src/load.jl:280
 4
 ```
 """
 macro safe_assign(expr::Expr, house::QuoteNode=QuoteNode(:SAFEHOUSE))
+    @show expr
     if expr.head === :local
         throw(ArgumentError("@safe_assign does not support local variable assignments."))
     end
-    assignment = (expr.head === :const) ? expr.args[1] : expr
-    assignment = (expr.head === :global) ? assignment.args[1] : assignment
+    if expr.head === :const
+        constant = true
+        assignment = expr.args[1]
+    else # not const
+        constant = false
+        assignment = expr
+    end # if ===, else
+    assignment = (assignment.head === :global) ? assignment.args[1] : assignment
     if assignment.head !== :(=)
         throw(ArgumentError("@safe_assign only works with assignment expressions."))
     end # if !
@@ -325,6 +344,7 @@ macro safe_assign(expr::Expr, house::QuoteNode=QuoteNode(:SAFEHOUSE))
             house=$house, force=$constant
         )
     )
+    @show callexpr
     return esc(callexpr)
 end # macro safe_assign
 
@@ -343,8 +363,8 @@ julia> load_object!(:greating, "./greating.jld2")
 "Hello World"
 
 julia> load_object!(:greating, "./greating.jld2")
-┌ Warning: Variable `greating` already defined in Main. The existing value has been stored in safehouse `Main.SAFEHOUSE` with ID 0x679fc168.
-└ @ SafeIO.Load src/load.jl:267
+┌ Warning: Variable greating already defined in Main. The existing value has been stored in safehouse Main.SAFEHOUSE with ID 0x679fc168.
+└ @ SafeIO.Load src/load.jl:280
 "Hello World"
 
 julia> greating
