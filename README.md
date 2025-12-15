@@ -93,7 +93,7 @@ old_values = SAFEHOUSE[:x]
 only(old_values)[]  # Access the stored value: 1
 ```
 
-## API Reference (AI Generated)
+## API Reference
 
 ### Save Module
 
