@@ -1,7 +1,7 @@
 name = "SafeIO"
 uuid = "b60d60a1-a286-437d-88e3-564ee59fee65"
-version = "0.5.2"
 authors = ["Waylon Wu <waylon_wu@outlook.com>"]
+version = "0.5.2"
 
 [deps]
 CRC32c = "8bf52ea8-c179-5cab-976a-9e18b702a9bc"
@@ -18,6 +18,7 @@ Logging = "1.10.10"
 Test = "1.10.10"
 TimeZones = "1.22.2"
 UUIDs = "1.10.10"
+julia = "1.10.10"
 
 [extras]
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
