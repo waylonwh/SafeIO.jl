@@ -1,7 +1,8 @@
 """
     SafeIO
 
-A Julia package for safe file I/O operations that protects against accidental data loss by automatically backing up existing files and variables before overwriting.
+A Julia package for safe file I/O operations that protects against accidental data loss by
+automatically backing up existing files and variables before overwriting.
 
 For more details, see https://github.com/waylonwh/SafeIO.jl.
 """
