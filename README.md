@@ -108,13 +108,13 @@ protect("./data.txt") do path
 end
 ```
 
-#### `@safe_save function_call(..., Protected("path"), ...)`
+#### `@protect function_call(..., Protected("path"), ...)`
 
 Macro that wraps any function call to protect the file specified by `Protected`.
 
 ```julia
-@safe_save write(Protected("./data.txt"), "content")
-@safe_save CSV.write(Protected("./data.csv"), df)
+@protect write(Protected("./data.txt"), "content")
+@protect CSV.write(Protected("./data.csv"), df)
 ```
 
 #### `save_object(obj, path::AbstractString)`
