@@ -7,14 +7,6 @@ export Protected
 export @protect
 export protect, save_object
 
-function unsafe_save_object(obj, path::AbstractString; spwarn::Bool=false)::AbstractString
-    if !spwarn
-        @warn "`unsafe_save` may overwrite existing files. Use `save` instead."
-    end # if !
-    JLD2.save_object(path, obj)
-    return path
-end # function unsafe_save_object
-
 """
     protect(iofunc::Function, path::AbstractString)
 
@@ -77,9 +69,8 @@ function protect(iofunc::Function, path::AbstractString)
         rethrow(err)
     finally # rename existing file if changed
         if pflag && open(CRC.crc32c, path) != filehash # file changed
-            cp(tempath, newpath)
-            rm(tempath)
-            @warn(
+            mv(tempath, newpath)
+            @info(
                 "File $path already exists. Last modified $modified. The EXISTING file has been renamed to $newpath."
             )
         end # if pflag
@@ -154,7 +145,7 @@ macro protect(expr::Expr)
 end # macro protect
 
 """
-    save_object(obj, path::AbstractString=joinpath(pwd(), string(reprhex(unique_id()), ".jld2")))::Bool
+    save_object(obj, path::AbstractString=joinpath(pwd(), string(reprhex(unique_id()), ".jld2"))) -> AbstractString
 
 Save `obj` to the specified `path`. If a file already exists at `path`, it is renamed to
 include a unique identifier before saving `obj`.
@@ -172,7 +163,8 @@ julia> save_object("Hello Again!", "./greating.jld2")
 """
 save_object(obj, path::AbstractString=joinpath(pwd(), string(reprhex(unique_id()), ".jld2")))::AbstractString =
     protect(path) do path
-        unsafe_save_object(obj, path; spwarn=true)
+        JLD2.save_object(path, obj)
+        return path
     end # protect do path
 
 end # module Save

@@ -125,7 +125,7 @@ function safehouse(modu::Module=Main, name::Symbol=:SAFEHOUSE)::Safehouse{modu}
         if existed isa Safehouse{modu} # exists and correct type
             return existed
         else # exists but not a Safehouse{modu}
-            @warn "A variable named `$name` already exists in module `$modu` but is not a Safehouse. This variable has been housed in a new Safehouse with the given name `$name`."
+            @warn "A variable named '$name' already exists in $modu but is not a Safehouse. This variable has been housed in a new Safehouse with the given name '$name'."
             tempname = gensym(name) # protect existing variable
             safehouse = Safehouse{modu}(tempname)
             house!(name, safehouse) # house the existing variable
@@ -211,13 +211,6 @@ julia> y[]
 (retrieve(var::Symbol, safehouse::Safehouse{M}=safehouse())::Vector{Refugee{M}}) where M =
     retrieve.(safehouse.variables[var], Ref(safehouse))
 
-function unsafe_load_object(path::AbstractString; spwarn::Bool=false)
-    if !spwarn
-        @warn "`unsafe_load` could overwrite existing variables. Use `load!` instead."
-    end # if !
-    return JLD2.load_object(path)
-end # function unsafe_load_object
-
 const keywords::NTuple{29,Symbol} = (
     :baremodule, :begin, :break, :catch, :const, :continue, :do, :else, :elseif, :end,
     :export, Symbol(false), :finally, :for, :function, :global, :if, :import, :let, :local,
@@ -276,7 +269,7 @@ function safe_assign!(
     end # if isconst
     if isdefined(modu, to)
         refugee = house!(to, safehouse(modu, house))
-        @warn(
+        @info(
             "Variable $to already defined in $modu. The existing value has been stored in safehouse $modu.$house with ID $(reprhex(refugee.id, true))."
         )
     end # if isdefined
@@ -397,6 +390,6 @@ julia> greating
 ```
 """
 load_object!(to::Symbol, path::AbstractString, modu::Module=Main; house::Symbol=:SAFEHOUSE) =
-    safe_assign!(to, unsafe_load_object(path; spwarn=true), modu; house)
+    safe_assign!(to, JLD2.load_object(path), modu; house)
 
 end # module Load
