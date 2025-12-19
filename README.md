@@ -40,7 +40,7 @@ Use `@protect` or `protect` to protect files from being accidentally overwritten
 
 # Second save - backs up existing file with unique ID before saving
 @protect write(Protected("./greeting.txt"), "Hello Again!")
-# ┌ Warning: File ./greeting.txt already exists. Last modified on 13 Dec 2025 at 00:40:00.
+# ┌ Info: File ./greeting.txt already exists. Last modified on 13 Dec 2025 at 00:40:00.
 # │ The EXISTING file has been renamed to ./greeting_1689874a.txt.
 # └ @ SafeIO.Save src/save.jl:70
 
@@ -51,7 +51,7 @@ protect("./greeting.txt") do path
     write(io, "\nHave a great day!")
     close(io)
 end
-# ┌ Warning: File ./greeting.txt already exists. Last modified on 15 Dec 2025 at 18:00:25.
+# ┌ Info: File ./greeting.txt already exists. Last modified on 15 Dec 2025 at 18:00:25.
 # │ The EXISTING file has been renamed to ./greeting_726ae51e.txt.
 # └ @ SafeIO.Save src/save.jl:82
 ```
@@ -64,7 +64,7 @@ save_object("Hello World", "./greeting.jld2")
 
 # Saving again backs up the existing file
 save_object("Hello Again!", "./greeting.jld2")
-# ┌ Warning: File ./greeting.jld2 already exists. Last modified on 13 Dec 2025 at 00:48:04.
+# ┌ Info: File ./greeting.jld2 already exists. Last modified on 13 Dec 2025 at 00:48:04.
 # │ The EXISTING file has been renamed to ./greeting_38ff9f7a.jld2.
 # └ @ SafeIO.Save src/save.jl:70
 
@@ -80,7 +80,7 @@ load_object!(:greeting, "./greeting.jld2")
 
 # Reassigning stores the old value in a safehouse
 @safe_assign x = 2
-# ┌ Warning: Variable `x` already defined in Main. The existing value has been stored
+# ┌ Info: Variable `x` already defined in Main. The existing value has been stored
 # │ in safehouse `Main.SAFEHOUSE` with ID 0x6b36583a.
 # └ @ SafeIO.Load src/load.jl:267
 
