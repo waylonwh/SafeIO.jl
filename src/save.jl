@@ -7,14 +7,6 @@ export Protected
 export @protect
 export protect, save_object
 
-function unsafe_save_object(obj, path::AbstractString; spwarn::Bool=false)::AbstractString
-    if !spwarn
-        @warn "`unsafe_save` may overwrite existing files. Use `save` instead."
-    end # if !
-    JLD2.save_object(path, obj)
-    return path
-end # function unsafe_save_object
-
 """
     protect(iofunc::Function, path::AbstractString)
 
@@ -34,7 +26,7 @@ julia> protect("./greating.txt") do path
 julia> protect("./greating.txt") do path
            write(path, "Hello Again!")
        end
-┌ Warning: File ./greating.txt already exists. Last modified on 14 Dec 2025 at 00:27:19. The EXISTING file has been renamed to ./greating_e7c4a63a.txt.
+┌ Info: File ./greating.txt already exists. Last modified on 14 Dec 2025 at 00:27:19. The EXISTING file has been renamed to ./greating_e7c4a63a.txt.
 └ @ SafeIO.Save src/save.jl:83
 12
 ```
@@ -77,9 +69,8 @@ function protect(iofunc::Function, path::AbstractString)
         rethrow(err)
     finally # rename existing file if changed
         if pflag && open(CRC.crc32c, path) != filehash # file changed
-            cp(tempath, newpath)
-            rm(tempath)
-            @warn(
+            mv(tempath, newpath)
+            @info(
                 "File $path already exists. Last modified $modified. The EXISTING file has been renamed to $newpath."
             )
         end # if pflag
@@ -118,7 +109,7 @@ julia> @protect write(Protected("./greating.txt"), "Hello World")
 11
 
 julia> @protect write(Protected("./greating.txt"), "Hello Again!")
-┌ Warning: File ./greating.txt already exists. Last modified on 13 Dec 2025 at 00:40:00. The EXISTING file has been renamed to ./greating_1689874a.txt.
+┌ Info: File ./greating.txt already exists. Last modified on 13 Dec 2025 at 00:40:00. The EXISTING file has been renamed to ./greating_1689874a.txt.
 └ @ SafeIO.Save src/save.jl:83
 12
 ```
@@ -154,7 +145,7 @@ macro protect(expr::Expr)
 end # macro protect
 
 """
-    save_object(obj, path::AbstractString=joinpath(pwd(), string(reprhex(unique_id()), ".jld2")))::Bool
+    save_object(obj, path::AbstractString=joinpath(pwd(), string(reprhex(unique_id()), ".jld2"))) -> AbstractString
 
 Save `obj` to the specified `path`. If a file already exists at `path`, it is renamed to
 include a unique identifier before saving `obj`.
@@ -165,14 +156,15 @@ julia> save_object("Hello World", "./greating.jld2")
 "./greating.jld2"
 
 julia> save_object("Hello Again!", "./greating.jld2")
-┌ Warning: File ./greating.jld2 already exists. Last modified on 13 Dec 2025 at 00:48:04. The EXISTING file has been renamed to ./greating_38ff9f7a.jld2.
+┌ Info: File ./greating.jld2 already exists. Last modified on 13 Dec 2025 at 00:48:04. The EXISTING file has been renamed to ./greating_38ff9f7a.jld2.
 └ @ SafeIO.Save src/save.jl:83
 "./greating.jld2"
 ```
 """
 save_object(obj, path::AbstractString=joinpath(pwd(), string(reprhex(unique_id()), ".jld2")))::AbstractString =
     protect(path) do path
-        unsafe_save_object(obj, path; spwarn=true)
+        JLD2.save_object(path, obj)
+        return path
     end # protect do path
 
 end # module Save

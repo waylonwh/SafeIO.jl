@@ -125,7 +125,7 @@ function safehouse(modu::Module=Main, name::Symbol=:SAFEHOUSE)::Safehouse{modu}
         if existed isa Safehouse{modu} # exists and correct type
             return existed
         else # exists but not a Safehouse{modu}
-            @warn "A variable named `$name` already exists in module `$modu` but is not a Safehouse. This variable has been housed in a new Safehouse with the given name `$name`."
+            @warn "A variable named '$name' already exists in $modu but is not a Safehouse. This variable has been housed in a new Safehouse with the given name '$name'."
             tempname = gensym(name) # protect existing variable
             safehouse = Safehouse{modu}(tempname)
             house!(name, safehouse) # house the existing variable
@@ -211,13 +211,6 @@ julia> y[]
 (retrieve(var::Symbol, safehouse::Safehouse{M}=safehouse())::Vector{Refugee{M}}) where M =
     retrieve.(safehouse.variables[var], Ref(safehouse))
 
-function unsafe_load_object(path::AbstractString; spwarn::Bool=false)
-    if !spwarn
-        @warn "`unsafe_load` could overwrite existing variables. Use `load!` instead."
-    end # if !
-    return JLD2.load_object(path)
-end # function unsafe_load_object
-
 const keywords::NTuple{29,Symbol} = (
     :baremodule, :begin, :break, :catch, :const, :continue, :do, :else, :elseif, :end,
     :export, Symbol(false), :finally, :for, :function, :global, :if, :import, :let, :local,
@@ -243,7 +236,7 @@ julia> x
 1
 
 julia> safe_assign!(:x, 2)
-┌ Warning: Variable x already defined in Main. The existing value has been stored in safehouse `Main.SAFEHOUSE` with ID 0xd236238c.
+┌ Info: Variable x already defined in Main. The existing value has been stored in safehouse `Main.SAFEHOUSE` with ID 0xd236238c.
 └ @ SafeIO.Load src/load.jl:280
 2
 
@@ -256,7 +249,7 @@ julia> const y = 3;
 julia> safe_assign!(:y, 4; constant=true)
 ┌ Warning: Assigning to constant variable y in Main.
 └ @ SafeIO.Load src/load.jl:272
-┌ Warning: Variable y already defined in Main. The existing value has been stored in safehouse Main.SAFEHOUSE with ID 0xf3632d2a.
+┌ Info: Variable y already defined in Main. The existing value has been stored in safehouse Main.SAFEHOUSE with ID 0xf3632d2a.
 └ @ SafeIO.Load src/load.jl:280
 4
 ```
@@ -276,7 +269,7 @@ function safe_assign!(
     end # if isconst
     if isdefined(modu, to)
         refugee = house!(to, safehouse(modu, house))
-        @warn(
+        @info(
             "Variable $to already defined in $modu. The existing value has been stored in safehouse $modu.$house with ID $(reprhex(refugee.id, true))."
         )
     end # if isdefined
@@ -308,7 +301,7 @@ julia> @safe_assign x = 1
 1
 
 julia> @safe_assign (x = 2; :MY_SAFEHOUSE)
-┌ Warning: Variable x already defined in Main. The existing value has been stored in safehouse Main.MY_SAFEHOUSE with ID 0xa7fbb3d0.
+┌ Info: Variable x already defined in Main. The existing value has been stored in safehouse Main.MY_SAFEHOUSE with ID 0xa7fbb3d0.
 └ @ SafeIO.Load src/load.jl:279
 2
 
@@ -321,7 +314,7 @@ julia> const y = 3;
 julia> @safe_assign const y = 4
 ┌ Warning: Assigning to constant variable y in Main.
 └ @ SafeIO.Load src/load.jl:272
-┌ Warning: Variable y already defined in Main. The existing value has been stored in safehouse Main.SAFEHOUSE with ID 0xa8900f9e.
+┌ Info: Variable y already defined in Main. The existing value has been stored in safehouse Main.SAFEHOUSE with ID 0xa8900f9e.
 └ @ SafeIO.Load src/load.jl:279
 4
 ```
@@ -388,7 +381,7 @@ julia> load_object!(:greating, "./greating.jld2")
 "Hello World"
 
 julia> load_object!(:greating, "./greating.jld2")
-┌ Warning: Variable greating already defined in Main. The existing value has been stored in safehouse Main.SAFEHOUSE with ID 0x679fc168.
+┌ Info: Variable greating already defined in Main. The existing value has been stored in safehouse Main.SAFEHOUSE with ID 0x679fc168.
 └ @ SafeIO.Load src/load.jl:280
 "Hello World"
 
@@ -397,6 +390,6 @@ julia> greating
 ```
 """
 load_object!(to::Symbol, path::AbstractString, modu::Module=Main; house::Symbol=:SAFEHOUSE) =
-    safe_assign!(to, unsafe_load_object(path; spwarn=true), modu; house)
+    safe_assign!(to, JLD2.load_object(path), modu; house)
 
 end # module Load

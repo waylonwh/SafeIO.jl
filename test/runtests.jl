@@ -54,17 +54,6 @@ macro test_2nd_save()
 end # macro test_2nd_save
 
 @testset "Save" begin
-    @testset "unsafe_save_objct" begin
-        path = tempname() * ".jld2"
-        strobj = "Hello Unsafe World"
-        SafeIO.Save.unsafe_save_object(strobj, path; spwarn=true)
-        @test JLD2.load_object(path) == strobj
-        @test_logs(
-            (:warn, "`unsafe_save` may overwrite existing files. Use `save` instead."),
-            SafeIO.Save.unsafe_save_object(strobj, path)
-        )
-    end # begin "unsafe_save_object"
-
     @testset "protect" begin
         @tempdirpath
         # first save
@@ -74,7 +63,7 @@ end # macro test_2nd_save
         @test_1st_save
         # second save
         @test_logs(
-            (:warn, "File $path already exists. Last modified on "*r".*$"),
+            (:info, "File $path already exists. Last modified on "*r".*$"),
             protect(path) do path
                 write(path, hello_again)
             end # protect do path, content
@@ -121,7 +110,7 @@ end # macro test_2nd_save
         @test_1st_save
         # second save
         @test_logs(
-            (:warn, "File $path already exists. Last modified on "*r".*$"),
+            (:info, "File $path already exists. Last modified on "*r".*$"),
             @protect write(Protected(path), hello_again)
         )
         @test_2nd_save
@@ -142,7 +131,7 @@ end # macro test_2nd_save
         @test world_ret == path
         @test JLD2.load_object(path) == hello_world
         # second save
-        @test_logs (:warn, "File $path already exists. Last modified on "*r".*$") save_object(hello_again, path)
+        @test_logs (:info, "File $path already exists. Last modified on "*r".*$") save_object(hello_again, path)
         files = readdir(dir)
         @test length(files) == 2
         for f in files
@@ -178,6 +167,17 @@ end
         @test safehouse(LoadTest, :TESTHOUSE) === LoadTest.TESTHOUSE
         safehouse(LoadTest, :NEWHOUSE)
         @test isdefined(LoadTest, :NEWHOUSE)
+        @eval LoadTest NOTHOUSE = :NOTHOUSE_VAL
+        @test_logs(
+            (
+                :warn,
+                "A variable named 'NOTHOUSE' already exists in Main.LoadTest but is not a Safehouse. This variable has been housed in a new Safehouse with the given name 'NOTHOUSE'."
+            ),
+            safehouse(LoadTest, :NOTHOUSE)
+        )
+        @test LoadTest.NOTHOUSE isa SafeIO.Load.Safehouse{LoadTest}
+        @test length(LoadTest.NOTHOUSE.refugees) == 1
+        @test only(LoadTest.NOTHOUSE[:NOTHOUSE])[] === :NOTHOUSE_VAL
         for _ in 1:2
             house!(:hello_world, LoadTest.TESTHOUSE)
         end # for 1:2
@@ -203,16 +203,6 @@ end
         @test isempty(LoadTest.TESTHOUSE.refugees)
     end # begin "Safehouse, safehouse, house!, retrieve"
 
-    @testset "unsafe_load_object" begin
-        path = tempname() * ".jld2"
-        JLD2.save_object(path, hello_world)
-        @test SafeIO.Load.unsafe_load_object(path; spwarn=true) == hello_world
-        @test_logs(
-            (:warn, "`unsafe_load` could overwrite existing variables. Use `load!` instead."),
-            SafeIO.Load.unsafe_load_object(path)
-        )
-    end # begin "unsafe_load_object"
-
     @testset "safe_assign!" begin
         var = :func_safe_assign!_test_var
         constvar = :func_safe_assign!_test_const
@@ -221,7 +211,7 @@ end
         @test getproperty(LoadTest, var) == hello_world
         @test_logs(
             (
-                :warn,
+                :info,
                 "Variable $var already defined in Main.LoadTest. The existing value has been stored in safehouse Main.LoadTest.$house with ID "*r"0x[0-9a-f]{8}\.$"
             ),
             safe_assign!(var, hello_again, LoadTest; house)
@@ -237,7 +227,7 @@ end
         @test_logs(
             (:warn, "Assigning to constant variable $constvar in Main.LoadTest."),
             (
-                :warn,
+                :info,
                 "Variable $constvar already defined in Main.LoadTest. The existing value has been stored in safehouse Main.LoadTest.$house with ID "*r"0x[0-9a-f]{8}\.$"
             ),
             safe_assign!(constvar, hello_again, LoadTest; house, constant=true)
@@ -268,7 +258,7 @@ end
         @test getproperty(Main, var) == hello_world
         @test_logs(
             (
-                :warn,
+                :info,
                 "Variable $var already defined in Main. The existing value has been stored in safehouse Main.$house with ID "*r"0x[0-9a-f]{8}\.$"
             ),
             @eval_str "@safe_assign ($var = hello_again; :$house)"
@@ -281,7 +271,7 @@ end
         @test_logs(
             (:warn, "Assigning to constant variable $constvar in Main."),
             (
-                :warn,
+                :info,
                 "Variable $constvar already defined in Main. The existing value has been stored in safehouse Main.$house with ID "*r"0x[0-9a-f]{8}\.$"
             ),
             @eval_str "@safe_assign (const $constvar = hello_again; :$house)"
@@ -315,7 +305,7 @@ end
         JLD2.save_object(path, hello_again)
         @test_logs(
             (
-                :warn,
+                :info,
                 "Variable $var already defined in Main.LoadTest. The existing value has been stored in safehouse Main.LoadTest.$house with ID "*r"0x[0-9a-f]{8}\.$"
             ),
             load_object!(var, path, LoadTest; house)
