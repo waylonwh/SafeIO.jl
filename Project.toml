@@ -1,7 +1,7 @@
 name = "SafeIO"
 uuid = "b60d60a1-a286-437d-88e3-564ee59fee65"
 authors = ["Waylon Wu <waylon_wu@outlook.com>"]
-version = "0.5.2"
+version = "0.6.0"
 
 [deps]
 CRC32c = "8bf52ea8-c179-5cab-976a-9e18b702a9bc"
